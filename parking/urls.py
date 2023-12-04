@@ -22,7 +22,8 @@ from rest_framework import routers, permissions
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView, TokenVerifyView
 from rest_framework_swagger.views import get_swagger_view
 
-from user.views import RegisterView, getProfile, PasswordResetView, PasswordResetConfirmView, MyObtainTokenPairView
+from user.views import RegisterView, getProfile, PasswordResetView, PasswordResetConfirmView, MyObtainTokenPairView, \
+    ChangePasswordView
 
 schema_view = get_swagger_view(title='Booking API')
 
@@ -52,9 +53,10 @@ urlpatterns = [
     path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
     path('api/v1/register/', RegisterView.as_view(), name='auth_register'),
     path('api/v1/profile/', getProfile, name='profile'),
-    path('reset-password/', PasswordResetView.as_view(), name='password_reset'),
-    path('password-reset-confirm/<uidb64>/<token>/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
-    path('login/', MyObtainTokenPairView.as_view(), name='token_obtain_pair'),
-    path('login/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('api/v1/reset-password/', PasswordResetView.as_view(), name='password_reset'),
+    path('api/v1/password-reset-confirm/<uidb64>/<token>/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
+    path('api/v1/login/', MyObtainTokenPairView.as_view(), name='token_obtain_pair'),
+    path('api/v1/login/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('api/v1/password/change/', ChangePasswordView.as_view(), name='change_password'),
 
 ]

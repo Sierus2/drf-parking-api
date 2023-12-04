@@ -43,7 +43,7 @@ INSTALLED_APPS = [
     'user.apps.UserConfig',
     'rest_framework_simplejwt',
     'drf_yasg',
-    'django_rest_passwordreset',
+
 
 ]
 

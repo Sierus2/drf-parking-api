@@ -1,12 +1,14 @@
 from coreapi.compat import force_text
+from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from rest_framework import generics
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import *
 from rest_framework_simplejwt.views import TokenObtainPairView
 from user.models import User
-from user.serializers import RegisterSerializer, MyTokenObtainPairSerializer, ProfileSerializer
-from rest_framework.generics import GenericAPIView
+from user.serializers import RegisterSerializer, MyTokenObtainPairSerializer, ProfileSerializer, \
+    ChangePasswordSerializer
+from rest_framework.generics import GenericAPIView, UpdateAPIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -79,14 +81,52 @@ class PasswordResetConfirmView(generics.GenericAPIView):
             new_password = request.data.get('new_password')
             if new_password:
                 try:
+                    validate_password(new_password)
                     user.set_password(new_password)
+
+                    user.repeat_password(new_password)
                     user.save()
-                    return Response({'success': 'Password has been reset!'}, status=400)
+                    return Response({'success': 'Password has been reset!'}, status=status.HTTP_200_OK)
                 except ValidationError as e:
-                    # Password validation failed, format error messages and return a 400 Bad Request response
                     error_messages = list(e.messages)
-                    return Response({'valid': False, 'errors': error_messages}, status=400)
+                    return Response({'valid': False, 'errors': error_messages}, status=status.HTTP_400_BAD_REQUEST)
             else:
                 return Response({'error': 'New password is required'}, status=status.HTTP_400_BAD_REQUEST)
         else:
             return Response({'error': 'Invalid token'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ChangePasswordView(UpdateAPIView):
+    serializer_class = ChangePasswordSerializer
+    model = User
+    permission_classes = (IsAuthenticated,)
+
+    def get_object(self, queryset=None):
+        obj = self.request.user
+        return obj
+
+    def update(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+
+        if serializer.is_valid():
+            # Check old password
+            if not self.object.check_password(serializer.data.get("old_password")):
+                return Response({"old_password": ["Wrong password."]}, status=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                validate_password(serializer.data.get("new_password"))
+                self.object.set_password(serializer.data.get("new_password"))
+                self.object.save()
+                response = {
+                    'status': 'success',
+                    'code': status.HTTP_200_OK,
+                    'message': 'Password updated successfully',
+                    'data': []
+                }
+                return Response({'success': 'Password has been reset!'}, status=status.HTTP_200_OK)
+            except ValidationError as e:
+                error_messages = list(e.messages)
+                return Response({'valid': False, 'errors': error_messages}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
