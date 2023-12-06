@@ -43,11 +43,16 @@ class UserToCar(models.Model):
 
 class Booking(models.Model):
     car = models.ForeignKey(Car, on_delete=models.CASCADE, related_name='booking_to_car')
-    start_time = models.DateTimeField(auto_now_add=True)
+    start_time = models.DateTimeField(null=True, blank=True)
     end_time = models.DateTimeField(null=True, blank=True)
-    ended = models.BooleanField(default=False)
     parking = models.ForeignKey(Parking, on_delete=models.CASCADE, related_name='booking_to_parking')
 
 
 class BaseSum(models.Model):
+    sum = models.IntegerField()
+
+
+class BookingSum(models.Model):
+    base_sum = models.ForeignKey(BaseSum, on_delete=models.PROTECT)
+    booking = models.ForeignKey(Booking, on_delete=models.CASCADE)
     sum = models.IntegerField()

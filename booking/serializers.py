@@ -18,7 +18,14 @@ class EmployeeOfParkingSerializer(serializers.ModelSerializer):
 class BookingSerializer(serializers.ModelSerializer):
     class Meta:
         model = Booking
-        fields = '__all__'
+        fields = ['car', 'start_time', 'end_time', 'parking']
+        # read_only_fields = ['car', ]  # Majburiy emasligini aniqlash
+
+    def validate(self, data):
+        if data.get('start_time') and data.get('end_time'):
+            if data['start_time'] > data['end_time']:
+                raise serializers.ValidationError("End time should be after start time")
+        return data
 
 
 class UserToCarSerializer(serializers.ModelSerializer):
@@ -37,3 +44,4 @@ class BaseSumSerializer(serializers.ModelSerializer):
     class Meta:
         model = BaseSum
         fields = '__all__'
+

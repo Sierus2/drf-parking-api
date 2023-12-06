@@ -1,3 +1,5 @@
+from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import path, include
 from drf_yasg import openapi
@@ -7,7 +9,8 @@ from rest_framework.routers import DefaultRouter, SimpleRouter
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView, TokenVerifyView
 from rest_framework_swagger.views import get_swagger_view
 
-from booking.views import CarViewSet, BookingViewSet, ParkingViewSet, EmployeeOfParkingViewSet, BaseSumViewSet
+from booking.views import CarViewSet, BookingViewSet, ParkingViewSet, EmployeeOfParkingViewSet, BaseSumViewSet, \
+    ReportViewSet
 from user.views import RegisterView, getProfile, PasswordResetView, PasswordResetConfirmView, MyObtainTokenPairView, \
     ChangePasswordView
 
@@ -59,10 +62,11 @@ urlpatterns = [
     path('api/v1/booking/profit/', BookingViewSet.as_view({'get': 'calculate_user_profit'}), name='calculate-user-profit'),
     path('api/v1/booking/pre-cancellation/', BookingViewSet.as_view({'post': 'pre_cancellation'}), name='pre-cancellation'),
     # Qolgan yo'nalishlar...
-
+    path('api/v1/reports/booking/', ReportViewSet.as_view({'get': 'list'}), name='report-list'),
+    path('api/v1/reports/booking/export-excell/', ReportViewSet.as_view({'get': 'export_to_excel'}), name='report-export'),
     # Booking Endpoints
     path('api/v1/', include(router.urls)),
 
 
 
-]
+]+ static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

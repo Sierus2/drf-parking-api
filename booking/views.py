@@ -1,12 +1,15 @@
 import smtplib
+import uuid
 from email.mime.base import MIMEBase
 from email.mime.text import MIMEText
+from .tasks import export_to_excel_task
 
+from django.http import HttpResponse
 from rest_framework import viewsets, status, permissions
 from rest_framework.authentication import *
 from rest_framework.generics import get_object_or_404
 
-from booking.models import Parking, Car, Booking, BaseSum, EmployeeOfParking
+from booking.models import Parking, Car, Booking, BaseSum, EmployeeOfParking, BookingSum
 from booking.serializers import ParkingSerializer, CarSerializer, BookingSerializer, EmployeeOfParkingSerializer, \
     BaseSumSerializer
 
@@ -179,64 +182,91 @@ class BookingViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def create(self, request):
-        # Checking if the request method is POST
-
-
         serializer = BookingSerializer(data=request.data)
 
         if serializer.is_valid():
-
-            # Getting car details from the request data
             car_id = request.data.get('car')
             car = get_object_or_404(Car, pk=car_id)
-            print(car)
-            print(car_id)
-            print(request.user)
-            # Checking user's and car's bookings count
-            user_bookings_count = Booking.objects.filter(car__owner=request.user).count()
-            car_bookings_count = Booking.objects.filter(car=car, ended=False).count()
+
+            parking_id = request.data.get('parking')
+            parking = get_object_or_404(Parking, pk=parking_id)
+
+            if car.owner != request.user:
+                return Response({
+                    "status": "error",
+                    "code": status.HTTP_403_FORBIDDEN,
+                    "message": "You do not have permission to book this car!"
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            start_time = request.data.get('start_time')
+            end_time = request.data.get('end_time')
+            print(start_time)
+            print(end_time)
+            start_time_obj = datetime.datetime.strptime(start_time, "%Y-%m-%dT%H:%M:%SZ")
+            end_time_obj = datetime.datetime.strptime(end_time, "%Y-%m-%dT%H:%M:%SZ")
+            time_diff = end_time_obj - start_time_obj
+            if time_diff > datetime.timedelta(minutes=180):
+                return Response({
+                    "status": "error",
+                    "code": status.HTTP_400_BAD_REQUEST,
+                    "message": "You can not book the parking lot for more than 3 hours!"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            if time_diff.total_seconds() < 10:  # 10 daqiqadan kichik bo'lsa
+                return Response({
+                    "status": "error",
+                    "code": status.HTTP_400_BAD_REQUEST,
+                    "message": "The booking time should be at least 10 minutes"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
             is_truck = car.is_truck
-            max_car_bookings = 2 if is_truck else 3
-            car_type_message = "truck" if is_truck else "regular"
 
-            # Handling booking limit conditions
-            if car_bookings_count >= max_car_bookings:
+            existing_bookings = Booking.objects.filter(
+                parking=parking,
+                end_time__gt=start_time,
+                start_time__lt=end_time
+            )
+            total_spots = parking.total_spots
+            booked_spots = existing_bookings.count()
+            print(booked_spots)
+            print(total_spots)
+
+            print(total_spots - booked_spots)
+            if booked_spots >= total_spots:
                 return Response({
                     "status": "error",
                     "code": status.HTTP_400_BAD_REQUEST,
-                    "message": f"You have exceeded the maximum {car_type_message} car bookings limit"
+                    "message": "The Parking is not available during the given time"
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-            if user_bookings_count >= 5:
+            existing_booking = Booking.objects.filter(
+                car=car,
+                end_time__gt=start_time,
+                start_time__lt=end_time
+            ).first()
+
+            if existing_booking:
                 return Response({
                     "status": "error",
                     "code": status.HTTP_400_BAD_REQUEST,
-                    "message": "You have booked 5 cars already"
+                    "message": "At this time, the car has already been booked"
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-            existing_booking = Booking.objects.filter(car=car, ended=False).first()
-
-            # Checking if the car is already booked
-            if existing_booking and existing_booking.end_time > timezone.now():
-                return Response({
-                    "status": "error",
-                    "code": status.HTTP_400_BAD_REQUEST,
-                    "message": "This car is already booked"
-                }, status=status.HTTP_400_BAD_REQUEST)
-
-            # Creating a new booking
-            start_time = timezone.now()
-            end_time = start_time + timezone.timedelta(minutes=180)
             new_booking = serializer.save(car=car, start_time=start_time, end_time=end_time)
+            serialized_booking = BookingSerializer(new_booking)
 
-            booking_cost_percentage = 0.20 if is_truck else 0.10
+            hourly_rate = 0.20 if car.is_truck else 0.10  # Avtomobilni aniqlash va foizni biriktirish
+            total_hours = time_diff.total_seconds() / 3600  # bir soatni narxini chiqarish
             base_sum = BaseSum.objects.first()
-            summa = base_sum.sum * booking_cost_percentage
+            summa = int(hourly_rate * total_hours * base_sum.sum)
+
+            BookingSum.objects.create(booking=new_booking, base_sum=base_sum, sum=summa)
 
             return Response({
                 "status": "success",
                 "message": "Booking created successfully",
-                "summa": summa
+                "summa": summa,
+                'booking': serialized_booking.data
             }, status=status.HTTP_201_CREATED)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -289,19 +319,11 @@ class BookingViewSet(viewsets.ModelViewSet):
                 "message": "This booking does not belong to your cars"
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        if booking.ended:
-            return Response({
-                "status": "error",
-                "code": status.HTTP_400_BAD_REQUEST,
-                "message": "This booking has already been cancelled"
-            }, status=status.HTTP_400_BAD_REQUEST)
-
         if booking.end_time > timezone.now():
             base_sum = BaseSum.objects.first()
             booking_cost_percentage = 0.10 if booking.car.is_truck else 0.20
             booking_cost = base_sum.sum * booking_cost_percentage
 
-            booking.ended = True
             booking.save()
 
             # Serialize the booking data
@@ -498,3 +520,73 @@ class BaseSumViewSet(viewsets.ModelViewSet):
     queryset = BaseSum.objects.all()
     serializer_class = BaseSumSerializer
     permission_classes = [permissions.IsAdminUser]  # Ruxsat sozlamasi
+
+
+class ReportViewSet(viewsets.ModelViewSet):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = BookingSerializer
+    queryset = Booking.objects.all()
+
+    def list(self, request):
+
+        user = request.user
+        queryset = self.get_queryset().filter(car__owner=user)
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+    def export_to_excel(self, request):
+        user_id = request.user.id  # Foydalanuvchi identifikatori
+        export_to_excel_task.delay(user_id)  # Celery taskini ishga tushiramiz
+        return Response("Export task has been queued.")  # Taskning ishga tushirilishini xabar beramiz
+
+    # def export_to_excel(self, request):
+    #     user = request.user
+    #     queryset = self.get_queryset().filter(car__owner=user)
+    #     serializer = self.get_serializer(queryset, many=True)
+    #
+    #     # Creating a new Excel file
+    #     output_filename = f'media/{uuid.uuid4()}.xlsx'
+    #     workbook = xlsxwriter.Workbook(output_filename)
+    #     worksheet = workbook.add_worksheet()
+    #
+    #     # Write header row
+    #     headers = ['Автомобил', 'Парковка', 'Бошлаш', 'Якунлаш', 'Сумма']
+    #     for col, header in enumerate(headers):
+    #         worksheet.write(0, col, header)
+    #
+    #     # Write data rows
+    #     for row, data in enumerate(serializer.data, start=1):
+    #         print(data)
+    #         car = Car.objects.get(pk=data['car'])
+    #         parking = Parking.objects.get(pk=data['parking'])
+    #         booking_sum = BookingSum.objects.filter(
+    #             booking__car=car, booking__parking=parking, booking__start_time=data['start_time'],
+    #             booking__end_time=data['end_time']).first()  # Get BookingSum object related to the current Booking
+    #
+    #         start_time = data.get('start_time', '')
+    #         formatted_start_time = datetime.datetime.strptime(start_time, '%Y-%m-%dT%H:%M:%SZ')
+    #         formatted_start_date_for_excel = formatted_start_time.strftime('%Y-%m-%d %H:%M')
+    #
+    #         end_time = data.get('end_time', '')
+    #         formatted_end_time = datetime.datetime.strptime(end_time, '%Y-%m-%dT%H:%M:%SZ')
+    #         formatted_end_date_for_excel = formatted_end_time.strftime('%Y-%m-%d %H:%M')
+    #         print(formatted_start_time)
+    #
+    #         worksheet.write(row, 0, car.model)
+    #         worksheet.write(row, 1, parking.title)
+    #         worksheet.write(row, 2, formatted_start_date_for_excel)
+    #         worksheet.write(row, 3, formatted_end_date_for_excel)
+    #         worksheet.write(row, 4, booking_sum.sum if booking_sum.sum else '')  # Writing BookingSum sum if available
+    #
+    #     workbook.close()
+    #
+    #     # Returning a response to download the Excel file
+    #     with open(output_filename, 'rb') as file:
+    #         response = HttpResponse(file.read(), content_type='application/vnd.ms-excel')
+    #         response['Content-Disposition'] = 'attachment; filename=' + output_filename
+    #         return response
+    #         # return Response({
+    #         #     "status": "success",
+    #         #     "message": "Excel file has been generated successfully",
+    #         #     "download_link": f"http://127.0.0.1:8000/{output_filename}"  # Masalan, fayl yuklab olish uchun link
+    #         # }, status=status.HTTP_200_OK)
