@@ -5,9 +5,9 @@ from rest_framework import generics
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import *
 from rest_framework_simplejwt.views import TokenObtainPairView
-from user.models import User
+from user.models import CustomUser
 from user.serializers import RegisterSerializer, MyTokenObtainPairSerializer, ProfileSerializer, \
-    ChangePasswordSerializer
+    ChangePasswordSerializer, ResetPasswordEmailSerializer
 from rest_framework.generics import GenericAPIView, UpdateAPIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -27,7 +27,7 @@ class MyObtainTokenPairView(TokenObtainPairView):
 
 # Create your views here.
 class RegisterView(generics.CreateAPIView):
-    queryset = User.objects.all()
+    queryset = CustomUser.objects.all()
     permission_classes = (AllowAny,)
     serializer_class = RegisterSerializer
 
@@ -41,14 +41,15 @@ def getProfile(request):
 
 
 class PasswordResetView(GenericAPIView):
+    serializer_class = ResetPasswordEmailSerializer
     permission_classes = [IsAdminUser]
 
     def post(self, request):
         email = request.data.get('email')
         if email:
             try:
-                user = User.objects.get(email=email)
-            except User.DoesNotExist:
+                user = CustomUser.objects.get(email=email)
+            except CustomUser.DoesNotExist:
                 return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
 
             # Generate token and send password reset email
@@ -70,11 +71,12 @@ class PasswordResetView(GenericAPIView):
 
 
 class PasswordResetConfirmView(generics.GenericAPIView):
+    serializer_class = ResetPasswordEmailSerializer
     def post(self, request, uidb64, token):
         try:
             uid = force_text(urlsafe_base64_decode(uidb64))
-            user = User.objects.get(pk=uid)
-        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+            user = CustomUser.objects.get(pk=uid)
+        except (TypeError, ValueError, OverflowError, CustomUser.DoesNotExist):
             user = None
 
         if user is not None and default_token_generator.check_token(user, token):
@@ -85,6 +87,7 @@ class PasswordResetConfirmView(generics.GenericAPIView):
                     user.set_password(new_password)
 
                     user.repeat_password(new_password)
+                    user.password = new_password
                     user.save()
                     return Response({'success': 'Password has been reset!'}, status=status.HTTP_200_OK)
                 except ValidationError as e:
@@ -98,7 +101,7 @@ class PasswordResetConfirmView(generics.GenericAPIView):
 
 class ChangePasswordView(UpdateAPIView):
     serializer_class = ChangePasswordSerializer
-    model = User
+    model = CustomUser
     permission_classes = (IsAuthenticated,)
 
     def get_object(self, queryset=None):
@@ -115,8 +118,8 @@ class ChangePasswordView(UpdateAPIView):
                 return Response({"old_password": ["Wrong password."]}, status=status.HTTP_400_BAD_REQUEST)
 
             try:
-                validate_password(serializer.data.get("new_password"))
-                self.object.set_password(serializer.data.get("new_password"))
+                # validate_password(serializer.data.get("new_password"))
+                # self.object.set_password(serializer.data.get("new_password"))
                 self.object.save()
                 response = {
                     'status': 'success',
@@ -124,7 +127,11 @@ class ChangePasswordView(UpdateAPIView):
                     'message': 'Password updated successfully',
                     'data': []
                 }
-                return Response({'success': 'Password has been reset!'}, status=status.HTTP_200_OK)
+                return Response({
+                    'success': 'Password has been reset!'
+                },
+                    status=status.HTTP_200_OK
+                )
             except ValidationError as e:
                 error_messages = list(e.messages)
                 return Response({'valid': False, 'errors': error_messages}, status=status.HTTP_400_BAD_REQUEST)

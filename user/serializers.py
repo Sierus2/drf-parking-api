@@ -5,7 +5,7 @@ from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-from user.models import User
+from user.models import CustomUser
 from user.utils import check_email_has
 
 
@@ -26,18 +26,18 @@ class RegisterSerializer(serializers.ModelSerializer):
     repeat_password = serializers.CharField(write_only=True, required=True)
     email = serializers.EmailField(
         required=True,
-        validators=[UniqueValidator(queryset=User.objects.all())]
+        validators=[UniqueValidator(queryset=CustomUser.objects.all())]
     )
 
     class Meta:
-        model = User
+        model = CustomUser
         fields = ('username', 'email', 'password', 'repeat_password',)
 
     def validate_email(self, value):
         lower_email = value.lower()
         if check_email_has(lower_email):
             print(41, 'has')
-            if User.objects.filter(email__iexact=lower_email).exists():
+            if CustomUser.objects.filter(email__iexact=lower_email).exists():
                 raise serializers.ValidationError(
                     {"email": "Email already exists! Please try other email!"})
             return lower_email
@@ -53,7 +53,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        user = User.objects.create(
+        user = CustomUser.objects.create(
             username=validated_data['username'],
             email=validated_data['email'],
             repeat_password=validated_data['repeat_password']
@@ -67,7 +67,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 class ProfileSerializer(serializers.ModelSerializer):
     class Meta:
-        model = User
+        model = CustomUser
         fields = ('first_name', 'last_name', 'username', 'email')
 
 
@@ -76,9 +76,10 @@ class ResetPasswordEmailSerializer(serializers.Serializer):
 
 
 class ChangePasswordSerializer(serializers.Serializer):
-    model = User
+    model = CustomUser
 
     old_password = serializers.CharField(required=True)
     new_password = serializers.CharField(required=True)
+
 
 
