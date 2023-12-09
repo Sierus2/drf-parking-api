@@ -43,8 +43,14 @@ INSTALLED_APPS = [
     'user.apps.UserConfig',
     'rest_framework_simplejwt',
     'drf_yasg',
-    'booking'
-
+    'booking',
+    'celery',
+    'django_celery_results',
+    'django_celery_beat',
+    'storages',
+    'social_django',
+    'rest_framework_social_oauth2',
+    'oauth2_provider',
 
 ]
 
@@ -139,7 +145,6 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
-STATIC_URL = 'static/'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
@@ -155,7 +160,6 @@ REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'rest_framework.schemas.coreapi.AutoSchema',
 
 }
-
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(days=10000),
@@ -218,10 +222,32 @@ JWT_AUTH = {
 # Email Backend Configuration
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
-EMAIL_PORT = 587  # Replace with your email port
+EMAIL_PORT = 465  # Replace with your email port
 EMAIL_USE_TLS = True  # Set to False if your email server doesn't use TLS
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_HOST_USER = 'sierus.yakubov@gmail.com'  # Replace with your email username
-EMAIL_HOST_PASSWORD = 'm6232971'  # Replace with your email password
-CELERY_BROKER_URL = 'redis://localhost:6379/0'  # Redis yoki boshqa broker uchun URL
-CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'  # Natijalar uchun Redis yoki boshqa backendr
+EMAIL_HOST = 'smtp.yandex.com'
+EMAIL_HOST_USER = decouple.config('EMAIL_HOST_USER')  # Replace with your email username
+EMAIL_HOST_PASSWORD = decouple.config('EMAIL_HOST_PASSWORD')  # Replace with your email password
+EMAIL_USER = 'salohiddin.yoqubov@yandex.com'
+
+CELERY_BROKER_URL = 'redis://127.0.0.1:6379'
+CELERY_RESULT_BACKEND = 'django-db'
+CELERY_RESULT_EXTENDED = True
+
+AWS_STORAGE_BUCKET_NAME = decouple.config('AWS_STORAGE_BUCKET_NAME')
+AWS_SECRET_ACCESS_KEY = decouple.config('AWS_SECRET_ACCESS_KEY')
+AWS_ACCESS_KEY_ID = decouple.config('AWS_ACCESS_KEY_ID')
+
+DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+STATICFILES_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+AWS_S3_CUSTOM_DOMAIN = '%s.s3.amazonaws.com' % AWS_STORAGE_BUCKET_NAME
+
+STATIC_URL = '/static/'
+STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
+AUTHENTICATION_BACKENDS = (
+    # Django Rest Framework authentication backends
+    'rest_framework_social_oauth2.backends.DjangoOAuth2',
+    'django.contrib.auth.backends.ModelBackend',  # Or any other backends you might be using
+)
+
+SOCIAL_AUTH_GOOGLE_OAUTH2_KEY = '487375547620-eg25vs6gn87mj55t7n2kg1achg6tgak7.apps.googleusercontent.com'
+SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET = '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'

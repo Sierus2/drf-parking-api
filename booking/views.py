@@ -1,36 +1,54 @@
-import smtplib
-import uuid
-from email.mime.base import MIMEBase
+import json
 from email.mime.text import MIMEText
-from .tasks import export_to_excel_task
 
 from django.http import HttpResponse
+from django_celery_beat.models import PeriodicTask, IntervalSchedule
+from .tasks import export_to_excel_task
 from rest_framework import viewsets, status, permissions
-from rest_framework.authentication import *
 from rest_framework.generics import get_object_or_404
 
 from booking.models import Parking, Car, Booking, BaseSum, EmployeeOfParking, BookingSum
 from booking.serializers import ParkingSerializer, CarSerializer, BookingSerializer, EmployeeOfParkingSerializer, \
     BaseSumSerializer
 
-from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 import datetime
 
-from parking import settings
 from parking.settings import EMAIL_HOST, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD, EMAIL_PORT
 from user.models import CustomUser
 import pandas as pd
-import xlsxwriter
+
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email import encoders
+from django.shortcuts import render
 
 
-# Create your views here.
+def google_login(request):
+    return render(request, template_name='oauth/google_login.html')
+
+
+def landing_page(request):
+    return render(request, 'landing.html')
+
+
+def schedule_tasks(request):
+    interval, _ = IntervalSchedule.objects.get_or_create(
+        every=30,
+        period=IntervalSchedule.SECONDS,
+    )
+    PeriodicTask.objects.create(
+        interval=interval,
+        name='my-schedule',
+        task='booking.tasks.my_task'
+
+    )
+
+    return HttpResponse('Task scheduled!')
+
 
 class CarViewSet(viewsets.ModelViewSet):
     """
@@ -528,7 +546,6 @@ class ReportViewSet(viewsets.ModelViewSet):
     queryset = Booking.objects.all()
 
     def list(self, request):
-
         user = request.user
         queryset = self.get_queryset().filter(car__owner=user)
         serializer = self.get_serializer(queryset, many=True)

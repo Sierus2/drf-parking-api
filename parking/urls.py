@@ -10,7 +10,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework_swagger.views import get_swagger_view
 
 from booking.views import CarViewSet, BookingViewSet, ParkingViewSet, EmployeeOfParkingViewSet, BaseSumViewSet, \
-    ReportViewSet
+    ReportViewSet, schedule_tasks, landing_page , google_login
 from user.views import RegisterView, getProfile, PasswordResetView, PasswordResetConfirmView, MyObtainTokenPairView, \
     ChangePasswordView
 
@@ -44,7 +44,10 @@ router.register(r'booking', BookingViewSet)
 
 
 urlpatterns = [
+    path('', landing_page, name='landing_page'),
+    path('google-auth/  ', google_login, name='google_login'),
     path('admin/', admin.site.urls),
+    path('schedule', schedule_tasks, name='schedule'),
     path('api/v1/token/verify/', TokenVerifyView.as_view(), name='token_verify'),
     path('swagger<format>/', schema_view.without_ui(cache_timeout=0), name='schema-json'),
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
@@ -66,6 +69,8 @@ urlpatterns = [
     path('api/v1/reports/booking/export-excell/', ReportViewSet.as_view({'get': 'export_to_excel'}), name='report-export'),
     # Booking Endpoints
     path('api/v1/', include(router.urls)),
+    path('api/v1/google-auth/', include('rest_framework_social_oauth2.urls')),
+
 
 
 

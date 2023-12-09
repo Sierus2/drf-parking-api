@@ -1,0 +1,15 @@
+{
+  "Id": "Policy1701946941291",
+  "Version": "20121017",
+  "Statement": [
+    {
+      "Sid": "Stmt1701946860557",
+      "Action": [
+        "s3:GetObject"
+      ],
+      "Effect": "Allow",
+      "Resource": "arn:aws:s3:::mybucket-96/*",
+      "Principal": "*"
+    }
+  ]
+}
